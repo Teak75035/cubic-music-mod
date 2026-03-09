@@ -12,5 +12,8 @@ It depends.
 
 Functions I need will be developed first if there's no issues telling me what you want.
 So just open an issue.
+Find me on Telegram: t.me/lingxianww
 
 # Waiting for improve
+- connect to panelhud-gnome-extension
+- desktop lyrics via PiP
