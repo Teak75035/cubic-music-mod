@@ -48,6 +48,8 @@ body {
     color: var(--text-primary);
     line-height: 1.6;
     transition: background-color 0.3s ease, color 0.3s ease;
+    margin: 0;
+    padding: 0;
 }
 
 /* 应用容器 */
@@ -55,6 +57,7 @@ body {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    position: relative;
     overflow: hidden;
 }
 
@@ -71,6 +74,11 @@ body {
     overflow-y: auto;
     z-index: 1;
     transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+/* 悬浮菜单模式下，侧边栏默认隐藏 */
+[data-sidebar-mode="floating"] .sidebar {
+    transform: translateX(-100%);
 }
 
 .sidebar.hidden {
@@ -175,23 +183,30 @@ body {
 
 /* 主内容区 */
 .main-content {
-    margin-left: 240px;
+    flex: 1;
+    margin-left: 0;
     margin-top: 70px;
     margin-bottom: 90px;
-    padding-top: 0;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
+    padding: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    transition: margin-left 0.3s ease;
     position: relative;
     height: calc(100vh - 160px);
+    transition: margin-left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1.1);
+}
+
+/* 悬浮菜单模式下，主内容区默认占满 */
+[data-sidebar-mode="floating"] .main-content {
+    margin-left: 0;
+}
+
+/* 跟随UI模式下，主内容区留出侧边栏空间 */
+[data-sidebar-mode="follow"] .main-content {
+    margin-left: 240px;
 }
 
 .main-content.floating-sidebar {
     margin-left: 0;
-    transition: margin-left 0.5s cubic-bezier(0.25, 0.8, 0.25, 1.1);
 }
 
 /* 头部 */
@@ -199,21 +214,26 @@ body {
     position: fixed;
     top: 0;
     left: 0;
+    right: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 16px 32px;
-    background-color: rgba(18, 18, 18, 0.8);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--border-color);
-    z-index: 100;
+    background-color: rgba(18, 18, 18, 0.6);
+    backdrop-filter: blur(80px) saturate(200%);
+    -webkit-backdrop-filter: blur(80px) saturate(200%);
+    border-bottom: 1px solid rgba(40, 40, 40, 0.5);
+    z-index: 1000;
     width: 100%;
     height: 70px;
 }
 
 [data-theme="light"] .header {
-    background-color: rgba(255, 255, 255, 0.8);
+    background-color: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(80px) saturate(200%);
+    -webkit-backdrop-filter: blur(80px) saturate(200%);
+    border-bottom: 1px solid rgba(224, 224, 224, 0.5);
+    z-index: 1000;
 }
 
 .header-right {
@@ -415,12 +435,13 @@ body {
 /* 内容区域 */
 .content-section {
     position: absolute;
-    top: 20px;
+    top: 0;
     left: 0;
     width: 100%;
-    height: calc(100% - 20px);
-    padding: 0 32px 32px;
+    height: 100%;
+    padding: 32px;
     overflow-y: auto;
+    overflow-x: hidden;
     margin: 0;
     opacity: 0;
     transform: translateX(100%);
@@ -432,8 +453,120 @@ body {
 .content-section h1 {
     font-size: 24px;
     font-weight: 700;
-    margin: 0 0 8px;
+    margin: 0;
     color: var(--text-primary);
+}
+
+/* 视图切换按钮 */
+.view-toggle-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background-color: var(--bg-tertiary);
+    border: none;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.view-toggle-btn:hover {
+    background-color: var(--bg-hover);
+}
+
+/* 本地歌曲列表 - 列表视图 */
+.local-track-list.list-view {
+    display: block;
+}
+
+.local-track-list.list-view .track-header {
+    display: grid;
+    grid-template-columns: 60px 60px 1fr 2fr 100px;
+}
+
+.local-track-list.list-view .track-item {
+    display: grid;
+    grid-template-columns: 60px 60px 1fr 2fr 100px;
+}
+
+/* 本地歌曲列表 - 封面视图 */
+.local-track-list.cover-view {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 24px;
+}
+
+.local-track-list.cover-view .track-header {
+    display: none;
+}
+
+.local-track-list.cover-view .track-list-empty {
+    grid-column: 1 / -1;
+}
+
+.local-track-list.cover-view .track-item {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.local-track-list.cover-view .track-item:hover {
+    background-color: var(--bg-tertiary);
+    transform: translateY(-4px);
+}
+
+.local-track-list.cover-view .track-cover {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+
+.local-track-list.cover-view .track-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.local-track-list.cover-view .track-number {
+    display: none;
+}
+
+.local-track-list.cover-view .track-info {
+    width: 100%;
+}
+
+.local-track-list.cover-view .track-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.local-track-list.cover-view .track-artist {
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.local-track-list.cover-view .track-album {
+    display: none;
+}
+
+.local-track-list.cover-view .track-duration {
+    display: none;
 }
 
 .home-message {
@@ -553,6 +686,18 @@ body {
     background-color: var(--bg-secondary);
     border-radius: 8px;
     overflow: hidden;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.local-track-list.view-exit {
+    opacity: 0;
+    transform: scale(0.9);
+}
+
+.local-track-list.view-enter {
+    opacity: 0;
+    transform: scale(1.15);
+    transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
 .track-list-empty {
@@ -650,20 +795,20 @@ body {
     display: flex;
     align-items: center;
     padding: 12px 24px;
-    background-color: rgba(18, 18, 18, 0.3);
-    backdrop-filter: blur(120px) saturate(200%);
-    -webkit-backdrop-filter: blur(120px) saturate(200%);
-    border-top: 1px solid rgba(40, 40, 40, 0.5);
+    background-color: rgba(18, 18, 18, 0.05);
+    backdrop-filter: blur(40px) saturate(120%);
+    -webkit-backdrop-filter: blur(40px) saturate(120%);
+    border-top: 1px solid rgba(40, 40, 40, 0.2);
     height: 90px;
     z-index: 10;
     transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 [data-theme="light"] .player-footer {
-    background-color: rgba(255, 255, 255, 0.3);
-    backdrop-filter: blur(120px) saturate(200%);
-    -webkit-backdrop-filter: blur(120px) saturate(200%);
-    border-top: 1px solid rgba(224, 224, 224, 0.5);
+    background-color: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(40px) saturate(120%);
+    -webkit-backdrop-filter: blur(40px) saturate(120%);
+    border-top: 1px solid rgba(224, 224, 224, 0.2);
 }
 
 /* 全屏模式 */
@@ -720,9 +865,9 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 80px 80px 60px;
-    max-width: 500px;
-    transition: all 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    padding: 80px 60px 60px 80px;
+    max-width: none;
+    transition: all 0.3s ease;
 }
 
 /* 歌词隐藏时，左侧内容自动居中 */
@@ -973,22 +1118,21 @@ body {
 .player-footer.fullscreen.background-blur::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
+    top: -50px;
+    left: -50px;
+    right: -50px;
     bottom: 0;
     background-image: var(--fullscreen-cover);
     background-size: cover;
-    background-position: center;
+    background-position: center bottom;
     filter: blur(40px) saturate(150%);
-    transform: scale(1.2);
     z-index: -1;
 }
 
 .player-footer.fullscreen.background-acrylic {
-    background-color: rgba(30, 30, 30, 0.6);
-    backdrop-filter: blur(40px) saturate(180%);
-    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    background-color: rgba(30, 30, 30, 0.4);
+    backdrop-filter: blur(20px) saturate(120%);
+    -webkit-backdrop-filter: blur(20px) saturate(120%);
 }
 
 .player-footer.fullscreen.background-black {
@@ -1052,14 +1196,14 @@ body {
 
 /* 全屏模式下的右侧内容 */
 .player-footer.fullscreen .fullscreen-right {
-    flex: 1.2;
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     justify-content: center;
-    padding: 80px 40px 60px 20px;
+    padding: 80px 80px 60px 60px;
     position: relative;
-    transition: transform 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    transition: all 0.3s ease;
 }
 
 /* 歌词隐藏时，右侧内容调整布局 */
@@ -1118,7 +1262,7 @@ body {
 .player-footer.fullscreen .fullscreen-bottom-right {
     position: absolute;
     bottom: 60px;
-    right: 40px;
+    right: 80px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1490,16 +1634,42 @@ body {
 }
 
 .setting-item select {
-    padding: 8px 16px;
+    padding: 8px 24px 8px 16px;
     background-color: var(--bg-tertiary);
     border: 1px solid var(--border-color);
-    border-radius: 4px;
+    border-radius: 20px;
     color: var(--text-primary);
     font-size: 14px;
     cursor: pointer;
     outline: none;
     height: 36px;
     vertical-align: middle;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 24 24' fill='%23b3b3b3' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.setting-item select::-ms-expand {
+    display: none;
+}
+
+.setting-item .custom-select select {
+    opacity: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
 }
 
 .setting-item input[type="checkbox"] {
@@ -1536,7 +1706,71 @@ body {
 }
 
 .setting-item select:focus {
-    border-color: var(--accent-color);
+    border-color: var(--text-secondary);
+    box-shadow: none;
+    background-color: var(--bg-secondary);
+}
+
+.setting-item select:hover {
+    border-color: var(--text-secondary);
+    background-color: var(--bg-secondary);
+}
+
+/* 自定义下拉菜单 */
+.setting-item .custom-select {
+    position: relative;
+    display: inline-block;
+}
+
+.setting-item .custom-select select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 24 24' fill='%23b3b3b3' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    cursor: pointer;
+}
+
+.setting-item .custom-select .custom-options {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 0 0 20px 20px;
+    border-top: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+    margin-top: -1px;
+}
+
+.setting-item .custom-select .custom-option {
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.setting-item .custom-select .custom-option:hover {
+    background-color: var(--bg-hover);
+}
+
+.setting-item .custom-select .custom-option.selected {
+    background-color: var(--bg-hover);
+    color: var(--accent-color);
+}
+
+.setting-item .custom-select.open .custom-options {
+    display: block;
+}
+
+.setting-item .custom-select.open select {
+    border-radius: 20px 20px 0 0;
+    border-bottom: none;
 }
 
 /* 底栏莫奈取色选项 - 默认隐藏 */

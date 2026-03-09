@@ -916,7 +916,12 @@ function updatePlayerInfo(track) {
         const savedBackground = localStorage.getItem('fullscreenBackground') || 'monet';
         if (savedBackground === 'blur') {
             playerFooter.style.setProperty('--fullscreen-cover', `url(${track.cover})`);
+            // 应用莫奈取色逻辑更新元素颜色
+            applyMonetBackground(track.cover);
         } else if (savedBackground === 'monet') {
+            applyMonetBackground(track.cover);
+        } else if (savedBackground === 'acrylic') {
+            // 应用莫奈取色逻辑更新元素颜色
             applyMonetBackground(track.cover);
         }
     }
@@ -1274,7 +1279,7 @@ function prevTrack() {
 let originalPlayerState = null;
 
 // 处理播放器信息区域点击事件
-function handlePlayerInfoClick() {
+async function handlePlayerInfoClick() {
     console.log('Player info clicked');
     console.log('Audio element:', audioElement);
     console.log('Tracks length:', tracks.length);
@@ -1293,6 +1298,7 @@ function handlePlayerInfoClick() {
     }
     
     // 保存原始状态
+    const header = document.querySelector('.header');
     originalPlayerState = {
         footer: {
             className: playerFooter.className,
@@ -1307,6 +1313,11 @@ function handlePlayerInfoClick() {
                 background: playerFooter.style.background,
                 border: playerFooter.style.border,
                 zIndex: playerFooter.style.zIndex
+            }
+        },
+        header: {
+            style: {
+                zIndex: header ? header.style.zIndex : ''
             }
         },
         playerInfo: {
@@ -1372,6 +1383,11 @@ function handlePlayerInfoClick() {
         // 保存原始HTML结构
         originalHTML: playerFooter.innerHTML
     };
+    
+    // 降低header的z-index，确保全屏footer在最上层
+    if (header) {
+        header.style.zIndex = '1';
+    }
     
     // 直接进入全屏，不添加延迟
     playerFooter.classList.add('fullscreen');
@@ -1511,7 +1527,10 @@ function handlePlayerInfoClick() {
             const svg = this.querySelector('svg');
             if (svg) {
                 // 检查当前是否为亮起状态
-                if (this.style.backgroundColor === 'white' || this.style.backgroundColor === '#141e30') {
+                const bgColor = this.style.backgroundColor;
+                const isLiked = bgColor === 'white' || bgColor === '#141e30' || bgColor === 'rgb(255, 255, 255)' || bgColor === 'rgb(20, 30, 48)';
+                
+                if (isLiked) {
                     // 恢复默认状态
                     this.style.backgroundColor = '';
                     svg.style.fill = 'currentColor';
@@ -1530,6 +1549,21 @@ function handlePlayerInfoClick() {
                 }
             }
         };
+        // 添加悬停效果
+        likeBtn.onmouseover = function() {
+            // 只有当按钮没有自定义背景时才应用悬停效果
+            if (!this.style.backgroundColor || this.style.backgroundColor === 'rgba(0, 0, 0, 0)') {
+                const currentColor = window.getComputedStyle(this.querySelector('svg')).fill;
+                const isWhiteText = currentColor === 'rgb(255, 255, 255)';
+                this.style.backgroundColor = isWhiteText ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            }
+        };
+        likeBtn.onmouseout = function() {
+            // 只有当按钮没有自定义背景时才恢复默认
+            if (!this.style.backgroundColor || this.style.backgroundColor === 'rgba(255, 255, 255, 0.1)' || this.style.backgroundColor === 'rgba(0, 0, 0, 0.1)') {
+                this.style.backgroundColor = '';
+            }
+        };
         bottomBtns.appendChild(likeBtn);
         
         const btn3 = document.createElement('button');
@@ -1542,6 +1576,13 @@ function handlePlayerInfoClick() {
         // 创建右侧内容容器
         const rightContent = document.createElement('div');
         rightContent.className = 'fullscreen-right';
+        
+        // 恢复歌词显示/隐藏状态
+        const savedLyricsHidden = localStorage.getItem('lyricsHidden') === 'true';
+        if (savedLyricsHidden) {
+            rightContent.classList.add('lyrics-hidden');
+            leftContent.classList.add('centered');
+        }
         
         // 创建歌词区域
         const lyricsContainer = document.createElement('div');
@@ -1645,7 +1686,7 @@ function handlePlayerInfoClick() {
         
         // 应用全屏设置
         const savedBackground = localStorage.getItem('fullscreenBackground') || 'monet';
-        applyFullscreenBackground(savedBackground);
+        await applyFullscreenBackground(savedBackground);
         
         const savedAlign = localStorage.getItem('lyricsAlign') || 'left';
         applyLyricsAlign(savedAlign);
@@ -2018,7 +2059,18 @@ function extractLyrics(content) {
 // 退出全屏模式
 function exitFullscreenMode() {
     const playerFooter = document.querySelector('.player-footer');
+    const header = document.querySelector('.header');
     if (!playerFooter || !originalPlayerState) return;
+    
+    // 保存歌词显示/隐藏状态
+    const rightContent = playerFooter.querySelector('.fullscreen-right');
+    const lyricsHidden = rightContent ? rightContent.classList.contains('lyrics-hidden') : false;
+    localStorage.setItem('lyricsHidden', lyricsHidden.toString());
+    
+    // 恢复header的原始z-index
+    if (header && originalPlayerState.header) {
+        header.style.zIndex = originalPlayerState.header.style.zIndex;
+    }
     
     // 1. 立即开始淡出全屏内容
     playerFooter.classList.remove('active');
@@ -2240,6 +2292,7 @@ function formatTime(seconds) {
 function handleResize() {
     const sidebar = document.querySelector('.sidebar');
     const mainContent = document.querySelector('.main-content');
+    const sidebarMode = localStorage.getItem('sidebarMode') || 'follow';
     
     if (window.innerWidth <= 768) {
         // 在移动设备上，隐藏侧边栏
@@ -2250,18 +2303,39 @@ function handleResize() {
             mainContent.style.marginLeft = '0';
         }
     } else {
-        // 在桌面设备上，显示侧边栏
+        // 在桌面设备上，根据侧边栏模式显示
         if (sidebar) {
-            sidebar.classList.remove('hidden');
-        }
-        if (mainContent) {
-            mainContent.style.marginLeft = '240px';
+            if (sidebarMode === 'floating') {
+                // 悬浮菜单模式
+                sidebar.classList.add('floating');
+                sidebar.classList.remove('hidden');
+                if (mainContent) {
+                    mainContent.classList.add('floating-sidebar');
+                    mainContent.style.marginLeft = '0';
+                }
+            } else {
+                // 跟随UI模式
+                sidebar.classList.remove('floating', 'hidden');
+                if (mainContent) {
+                    mainContent.classList.remove('floating-sidebar');
+                    mainContent.style.marginLeft = '240px';
+                }
+            }
         }
     }
 }
 
 // 监听窗口大小变化
 window.addEventListener('resize', handleResize);
+
+// 监听页面可见性变化
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        // 页面变为可见时，重新应用侧边栏模式
+        const sidebarMode = localStorage.getItem('sidebarMode') || 'follow';
+        applySidebarMode(sidebarMode);
+    }
+});
 
 // 全局变量
 let currentActiveContent = null;
@@ -2272,6 +2346,28 @@ let homeContent, playlistContent, settingsContent;
 // 初始化播放器
 window.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded');
+    
+    // 立即应用侧边栏模式，防止闪烁
+    if (window.sidebarMode === 'floating') {
+        const mainContent = document.querySelector('.main-content');
+        const sidebar = document.querySelector('.sidebar');
+        if (mainContent) {
+            mainContent.classList.add('floating-sidebar');
+        }
+        if (sidebar) {
+            // 确保侧边栏有floating类
+            sidebar.classList.add('floating');
+            // 设置初始状态
+            sidebar.style.top = '80px';
+            sidebar.style.left = '10px';
+            sidebar.style.bottom = 'auto';
+            sidebar.style.height = 'auto';
+            sidebar.style.transformOrigin = 'top left';
+            sidebar.style.transform = 'scale(0.2)';
+            sidebar.style.opacity = '0';
+            sidebar.style.visibility = 'hidden';
+        }
+    }
     
     initPlayer();
     
@@ -2323,6 +2419,7 @@ window.addEventListener('DOMContentLoaded', function() {
     initTheme();
     initSidebarMode();
     initFullscreenSettings();
+    initCustomSelects();
 });
 
 // 初始化主题
@@ -2387,6 +2484,133 @@ function initSidebarMode() {
     });
 }
 
+// 初始化自定义下拉菜单
+function initCustomSelects() {
+    const selectElements = document.querySelectorAll('.setting-item select');
+    
+    selectElements.forEach(select => {
+        // 创建自定义选择框容器
+        const customSelect = document.createElement('div');
+        customSelect.className = 'custom-select';
+        
+        // 将select元素移动到自定义容器中
+        select.parentNode.insertBefore(customSelect, select);
+        customSelect.appendChild(select);
+        
+        // 创建显示当前选择的元素
+        const displayElement = document.createElement('div');
+        displayElement.className = 'custom-select-display';
+        displayElement.style.cssText = `
+            padding: 8px 24px 8px 16px;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            color: var(--text-primary);
+            font-size: 14px;
+            cursor: pointer;
+            height: 36px;
+            width: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 24 24' fill='%23b3b3b3' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 16px;
+            transition: all 0.3s ease;
+            user-select: none;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        `;
+        
+        // 设置显示文本
+        const selectedOption = select.querySelector('option:checked');
+        displayElement.textContent = selectedOption ? selectedOption.textContent : '';
+        
+        customSelect.insertBefore(displayElement, select);
+        
+        // 创建选项容器
+        const optionsContainer = document.createElement('div');
+        optionsContainer.className = 'custom-options';
+        customSelect.appendChild(optionsContainer);
+        
+        // 填充选项
+        const options = select.querySelectorAll('option');
+        options.forEach(option => {
+            const customOption = document.createElement('div');
+            customOption.className = 'custom-option';
+            customOption.textContent = option.textContent;
+            customOption.dataset.value = option.value;
+            
+            if (option.selected) {
+                customOption.classList.add('selected');
+            }
+            
+            // 处理选项点击
+            customOption.addEventListener('click', function(e) {
+                e.stopPropagation();
+                select.value = this.dataset.value;
+                
+                // 更新显示文本
+                displayElement.textContent = this.textContent;
+                
+                // 更新选中状态
+                optionsContainer.querySelectorAll('.custom-option').forEach(opt => {
+                    opt.classList.remove('selected');
+                });
+                this.classList.add('selected');
+                
+                // 触发change事件
+                const event = new Event('change');
+                select.dispatchEvent(event);
+                
+                // 关闭下拉菜单
+                customSelect.classList.remove('open');
+            });
+            
+            optionsContainer.appendChild(customOption);
+        });
+        
+        // 处理显示元素点击
+        displayElement.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // 先关闭所有其他打开的下拉菜单
+            document.querySelectorAll('.custom-select.open').forEach(select => {
+                if (select !== customSelect) {
+                    select.classList.remove('open');
+                }
+            });
+            // 切换当前下拉菜单
+            customSelect.classList.toggle('open');
+        });
+        
+        // 处理select变化
+        select.addEventListener('change', function() {
+            const value = this.value;
+            const selectedOption = this.querySelector('option:checked');
+            if (selectedOption) {
+                displayElement.textContent = selectedOption.textContent;
+            }
+            
+            optionsContainer.querySelectorAll('.custom-option').forEach(opt => {
+                if (opt.dataset.value === value) {
+                    opt.classList.add('selected');
+                } else {
+                    opt.classList.remove('selected');
+                }
+            });
+        });
+    });
+    
+    // 点击外部关闭下拉菜单
+    document.addEventListener('click', function() {
+        document.querySelectorAll('.custom-select.open').forEach(select => {
+            select.classList.remove('open');
+        });
+    });
+}
+
 // 应用侧边栏模式
 function applySidebarMode(mode) {
     const sidebar = document.querySelector('.sidebar');
@@ -2395,6 +2619,9 @@ function applySidebarMode(mode) {
     if (!sidebar || !mainContent) return;
     
     console.log('Applying sidebar mode:', mode);
+    
+    // 更新 data-sidebar-mode 属性
+    document.documentElement.setAttribute('data-sidebar-mode', mode);
     
     // 重置状态
     isFloatingOpen = false;
@@ -2452,6 +2679,10 @@ function initFullscreenSettings() {
             localStorage.setItem('fullscreenBackground', newBackground);
             applyFullscreenBackground(newBackground);
             toggleFooterMonetVisibility(newBackground);
+            // 立即更新普通模式下的footer颜色
+            if (tracks[currentTrack]) {
+                updateFooterColor();
+            }
         });
     }
     
@@ -2502,7 +2733,11 @@ async function updateFooterColor() {
     
     if (!playerFooter) return;
     
-    if (footerMonetEnabled && tracks[currentTrack]) {
+    // 只在特定条件下应用封面/莫奈取色自适应：
+    // 1. 底栏跟随全屏背景开启
+    // 2. 全屏背景为莫奈取色或封面模糊
+    // 其他情况恢复默认颜色（跟随主题）
+    if (footerMonetEnabled && (savedBackground === 'monet' || savedBackground === 'blur') && tracks[currentTrack]) {
         // 根据不同的背景类型应用不同的底栏效果
         switch (savedBackground) {
             case 'monet':
@@ -2581,22 +2816,54 @@ function resetFooterColors() {
     const playerFooter = document.querySelector('.player-footer');
     if (!playerFooter || playerFooter.classList.contains('fullscreen')) return;
     
+    // 移除我们添加的背景容器（从footer的父元素中查找）
+    const bgContainers = document.querySelectorAll('.footer-bg-container');
+    bgContainers.forEach(container => container.remove());
+    
+    // 移除我们添加的背景层（从footer的父元素中查找）
+    const bgLayers = document.querySelectorAll('.footer-blur-bg');
+    bgLayers.forEach(layer => layer.remove());
+    
+    // 移除我们添加的覆盖层（从footer的父元素中查找）
+    const overlays = document.querySelectorAll('.footer-overlay');
+    overlays.forEach(overlay => overlay.remove());
+    
     // 移除内联样式，让CSS主题生效
+    playerFooter.style.position = '';
+    playerFooter.style.overflow = '';
+    playerFooter.style.backgroundImage = '';
+    playerFooter.style.backgroundColor = '';
+    playerFooter.style.backdropFilter = '';
+    playerFooter.style.webkitBackdropFilter = '';
+    playerFooter.style.backgroundFilter = '';
+    
+    // 根据全屏背景模式决定是否重置按钮颜色
+    const savedBackground = localStorage.getItem('fullscreenBackground') || 'monet';
+    const shouldResetButtonColors = savedBackground === 'acrylic' || savedBackground === 'black';
+    
     const textElements = playerFooter.querySelectorAll('h4, p, .time');
     const svgElements = playerFooter.querySelectorAll('svg');
     const controlBtns = playerFooter.querySelectorAll('.control-btn');
     
-    textElements.forEach(el => {
-        el.style.color = '';
-    });
+    // 只在亚克力或纯黑模式下重置文字颜色（跟随主题）
+    if (shouldResetButtonColors) {
+        textElements.forEach(el => {
+            el.style.color = '';
+        });
+    }
     
-    svgElements.forEach(el => {
-        el.style.fill = '';
-    });
+    // 只在亚克力或纯黑模式下重置SVG和按钮颜色（跟随主题）
+    if (shouldResetButtonColors) {
+        svgElements.forEach(el => {
+            el.style.fill = '';
+        });
+    }
     
-    controlBtns.forEach(el => {
-        el.style.color = '';
-    });
+    if (shouldResetButtonColors) {
+        controlBtns.forEach(el => {
+            el.style.color = '';
+        });
+    }
 }
 
 // 为普通模式footer应用封面模糊效果
@@ -2605,14 +2872,81 @@ function applyBlurBackgroundToFooter(coverUrl) {
     if (!playerFooter || playerFooter.classList.contains('fullscreen')) return;
     
     try {
-        // 设置封面裁切并模糊的效果
-        playerFooter.style.backgroundImage = `url(${coverUrl})`;
-        playerFooter.style.backgroundSize = 'cover';
-        playerFooter.style.backgroundPosition = 'center';
+        // 移除之前可能存在的背景层
+        const oldBgLayer = document.querySelector('.footer-blur-bg');
+        if (oldBgLayer) {
+            oldBgLayer.remove();
+        }
+        
+        // 移除可能存在的覆盖层
+        const oldOverlay = document.querySelector('.footer-overlay');
+        if (oldOverlay) {
+            oldOverlay.remove();
+        }
+        
+        // 移除可能存在的裁剪容器
+        const oldContainer = document.querySelector('.footer-bg-container');
+        if (oldContainer) {
+            oldContainer.remove();
+        }
+        
+        // 重置样式
+        playerFooter.style.position = '';
+        playerFooter.style.overflow = '';
+        playerFooter.style.backgroundImage = '';
         playerFooter.style.backgroundColor = '';
-        playerFooter.style.backdropFilter = 'blur(40px)';
-        playerFooter.style.webkitBackdropFilter = 'blur(40px)';
-        playerFooter.style.backgroundFilter = 'blur(40px)';
+        playerFooter.style.backdropFilter = '';
+        playerFooter.style.webkitBackdropFilter = '';
+        playerFooter.style.backgroundFilter = '';
+        
+        // 创建一个裁剪容器来限制模糊效果
+        const bgContainer = document.createElement('div');
+        bgContainer.className = 'footer-bg-container';
+        bgContainer.style.cssText = `
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 90px;
+            z-index: 8;
+            overflow: hidden;
+            pointer-events: none;
+        `;
+        
+        // 创建一个专用的背景层
+        const bgLayer = document.createElement('div');
+        bgLayer.className = 'footer-blur-bg';
+        bgLayer.style.cssText = `
+            position: absolute;
+            top: -40px;
+            left: -40px;
+            right: -40px;
+            bottom: -40px;
+            background-image: url(${coverUrl});
+            background-size: cover;
+            background-position: center bottom;
+            filter: blur(40px);
+        `;
+        
+        bgContainer.appendChild(bgLayer);
+        
+        // 插入背景容器到footer的前一个兄弟节点
+        playerFooter.parentNode.insertBefore(bgContainer, playerFooter);
+        
+        // 添加半透明覆盖层
+        const overlay = document.createElement('div');
+        overlay.className = 'footer-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 90px;
+            background-color: rgba(0, 0, 0, 0.4);
+            z-index: 9;
+            pointer-events: none;
+        `;
+        playerFooter.parentNode.insertBefore(overlay, bgContainer.nextSibling);
         
         // 设置文字颜色为白色（因为模糊背景通常较暗）
         const textElements = playerFooter.querySelectorAll('h4, p, .time');
@@ -2633,11 +2967,6 @@ function applyBlurBackgroundToFooter(coverUrl) {
         
     } catch (e) {
         console.error('Error applying blur background to footer:', e);
-        playerFooter.style.backgroundImage = '';
-        playerFooter.style.backgroundColor = '';
-        playerFooter.style.backdropFilter = '';
-        playerFooter.style.webkitBackdropFilter = '';
-        playerFooter.style.backgroundFilter = '';
         // 恢复默认颜色
         resetFooterColors();
     }
@@ -2690,7 +3019,7 @@ function applyAcrylicBackgroundToFooter() {
 }
 
 // 应用全屏背景样式
-function applyFullscreenBackground(background) {
+async function applyFullscreenBackground(background) {
     const playerFooter = document.querySelector('.player-footer');
     if (!playerFooter) return;
     
@@ -2709,63 +3038,22 @@ function applyFullscreenBackground(background) {
         if (!playerFooter.classList.contains('fullscreen')) {
             resetFooterColors();
         }
-        // 全屏模式下，设置默认文本颜色为白色（因为模糊背景通常较暗）
+        // 全屏模式下，应用莫奈取色逻辑
         if (playerFooter.classList.contains('fullscreen')) {
-            const textElements = playerFooter.querySelectorAll('h2, p, .time, .lyric-line');
-            const svgElements = playerFooter.querySelectorAll('svg');
-            const controlBtns = playerFooter.querySelectorAll('.control-btn');
-            
-            textElements.forEach(el => {
-                el.style.color = 'white';
-            });
-            
-            svgElements.forEach(el => {
-                el.style.fill = 'white';
-            });
-            
-            controlBtns.forEach(el => {
-                // 只修改播放/暂停按钮的样式
-                if (el.classList.contains('play-btn')) {
-                    // 模糊背景下：按钮背景白色，图标黑色
-                    el.style.backgroundColor = 'white';
-                    el.style.color = '#141e30';
-                    // 修正SVG颜色
-                    const svg = el.querySelector('svg');
-                    if (svg) {
-                        svg.style.fill = '#141e30';
-                    }
-                    // 添加悬停效果
-                    el.style.transition = 'background-color 0.2s ease';
-                    el.onmouseover = function() {
-                        this.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
-                    };
-                    el.onmouseout = function() {
-                        this.style.backgroundColor = 'white';
-                    };
-                } else {
-                    // 恢复其他按钮的默认样式
-                    el.style.transition = 'background-color 0.2s ease';
-                    el.onmouseover = function() {
-                        // 只有当按钮没有自定义背景时才应用悬停效果
-                        if (!this.style.backgroundColor || this.style.backgroundColor === 'rgba(0, 0, 0, 0)') {
-                            this.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                        }
-                    };
-                    el.onmouseout = function() {
-                        // 只有当按钮没有自定义背景时才恢复默认
-                        if (!this.style.backgroundColor || this.style.backgroundColor === 'rgba(255, 255, 255, 0.1)') {
-                            this.style.backgroundColor = '';
-                        }
-                    };
-                }
-            });
-            
-            // 初始化歌词切换按钮样式
-            initLyricsToggleBtn();
+            await applyMonetBackground(tracks[currentTrack].cover);
         }
     } else if (background === 'monet' && tracks[currentTrack]) {
         // 应用莫奈取色
-        applyMonetBackground(tracks[currentTrack].cover);
+        await applyMonetBackground(tracks[currentTrack].cover);
+    } else if (background === 'acrylic' && tracks[currentTrack]) {
+        // 当切换到非莫奈背景时，恢复底栏默认颜色
+        if (!playerFooter.classList.contains('fullscreen')) {
+            resetFooterColors();
+        }
+        // 全屏模式下，应用莫奈取色逻辑
+        if (playerFooter.classList.contains('fullscreen')) {
+            await applyMonetBackground(tracks[currentTrack].cover);
+        }
     } else {
         // 当切换到非莫奈背景时，恢复底栏默认颜色
         if (!playerFooter.classList.contains('fullscreen')) {
@@ -2775,8 +3063,6 @@ function applyFullscreenBackground(background) {
         if (playerFooter.classList.contains('fullscreen')) {
             let textColor = 'white';
             if (background === 'black') {
-                textColor = 'white';
-            } else if (background === 'acrylic') {
                 textColor = 'white';
             }
             
@@ -2810,6 +3096,21 @@ function applyFullscreenBackground(background) {
                     };
                     el.onmouseout = function() {
                         this.style.backgroundColor = 'white';
+                    };
+                } else if (el.classList.contains('like-btn')) {
+                    // 喜欢按钮：添加悬停效果，只保留两种状态
+                    el.style.transition = 'background-color 0.2s ease';
+                    el.onmouseover = function() {
+                        // 只有当按钮没有自定义背景时才应用悬停效果
+                        if (!this.style.backgroundColor || this.style.backgroundColor === 'rgba(0, 0, 0, 0)') {
+                            this.style.backgroundColor = useWhiteText ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                        }
+                    };
+                    el.onmouseout = function() {
+                        // 只有当按钮没有自定义背景时才恢复默认
+                        if (!this.style.backgroundColor || this.style.backgroundColor === 'rgba(255, 255, 255, 0.1)' || this.style.backgroundColor === 'rgba(0, 0, 0, 0.1)') {
+                            this.style.backgroundColor = '';
+                        }
                     };
                 } else {
                     // 恢复其他按钮的默认样式
@@ -2856,8 +3157,9 @@ function getColorLuminance(r, g, b) {
 // 判断应该使用白色还是黑色文字
 function shouldUseWhiteText(r, g, b) {
     const luminance = getColorLuminance(r, g, b);
-    // 阈值：亮度低于128使用白色文字，高于128使用黑色文字
-    return luminance < 128;
+    // 阈值：亮度低于160使用白色文字，高于160使用黑色文字
+    // 调整阈值以确保背景较亮时使用黑色文字
+    return luminance < 160;
 }
 
 // 从封面提取主色调（莫奈取色）
@@ -2949,12 +3251,26 @@ async function applyMonetBackground(coverUrl) {
         // 全屏模式下直接应用莫奈取色
         try {
             const color = await extractMonetColors(coverUrl);
-            // 基于主色调创建深色渐变背景
-            playerFooter.style.backgroundColor = `rgba(${color.r}, ${color.g}, ${color.b}, 0.9)`;
             
-            // 根据背景颜色决定文字和图标颜色
-            const useWhiteText = shouldUseWhiteText(color.r, color.g, color.b);
-            const textColor = useWhiteText ? 'white' : '#141e30';
+            // 检查当前背景模式
+            const isBlurBackground = playerFooter.classList.contains('background-blur');
+            const isAcrylicBackground = playerFooter.classList.contains('background-acrylic');
+            
+            // 只有在莫奈模式下才修改背景颜色
+            if (!isBlurBackground && !isAcrylicBackground) {
+                // 基于主色调创建深色渐变背景
+                playerFooter.style.backgroundColor = `rgba(${color.r}, ${color.g}, ${color.b}, 0.9)`;
+            }
+            
+            // 决定文字和图标颜色
+            let useWhiteText = true; // 默认为白色文字
+            let textColor = 'white'; // 默认为白色文字
+            
+            // 只有在非亚克力模式下才根据背景颜色决定文字颜色
+            if (!isAcrylicBackground) {
+                useWhiteText = shouldUseWhiteText(color.r, color.g, color.b);
+                textColor = useWhiteText ? 'white' : '#141e30';
+            }
             
             // 获取全屏模式下的所有文本和图标元素
             const textElements = playerFooter.querySelectorAll('h2, p, .time, .lyric-line');
@@ -2975,40 +3291,35 @@ async function applyMonetBackground(coverUrl) {
                 el.style.color = textColor;
                 // 只修改播放/暂停按钮的样式
                 if (el.classList.contains('play-btn')) {
-                    // 根据背景颜色设置按钮样式
-                    if (useWhiteText) {
-                        // 深色背景：按钮背景白色，图标黑色
-                        el.style.backgroundColor = 'white';
-                        el.style.color = '#141e30';
-                        // 修正SVG颜色
-                        const svg = el.querySelector('svg');
-                        if (svg) {
-                            svg.style.fill = '#141e30';
-                        }
-                    } else {
-                        // 浅色背景：按钮背景黑色，图标白色
-                        el.style.backgroundColor = '#141e30';
-                        el.style.color = 'white';
-                        // 修正SVG颜色
-                        const svg = el.querySelector('svg');
-                        if (svg) {
-                            svg.style.fill = 'white';
-                        }
+                    // 播放按钮始终使用白色背景和黑色图标
+                    el.style.backgroundColor = 'white';
+                    el.style.color = '#141e30';
+                    // 修正SVG颜色
+                    const svg = el.querySelector('svg');
+                    if (svg) {
+                        svg.style.fill = '#141e30';
                     }
                     // 添加悬停效果
                     el.style.transition = 'background-color 0.2s ease';
                     el.onmouseover = function() {
-                        if (useWhiteText) {
-                            this.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
-                        } else {
-                            this.style.backgroundColor = 'rgba(20, 30, 48, 0.8)';
+                        this.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+                    };
+                    el.onmouseout = function() {
+                        this.style.backgroundColor = 'white';
+                    };
+                } else if (el.classList.contains('like-btn')) {
+                    // 喜欢按钮：添加悬停效果，只保留两种状态
+                    el.style.transition = 'background-color 0.2s ease';
+                    el.onmouseover = function() {
+                        // 只有当按钮没有自定义背景时才应用悬停效果
+                        if (!this.style.backgroundColor || this.style.backgroundColor === 'rgba(0, 0, 0, 0)') {
+                            this.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
                         }
                     };
                     el.onmouseout = function() {
-                        if (useWhiteText) {
-                            this.style.backgroundColor = 'white';
-                        } else {
-                            this.style.backgroundColor = '#141e30';
+                        // 只有当按钮没有自定义背景时才恢复默认
+                        if (!this.style.backgroundColor || this.style.backgroundColor === 'rgba(255, 255, 255, 0.1)') {
+                            this.style.backgroundColor = '';
                         }
                     };
                 } else {
@@ -3017,12 +3328,12 @@ async function applyMonetBackground(coverUrl) {
                     el.onmouseover = function() {
                         // 只有当按钮没有自定义背景时才应用悬停效果
                         if (!this.style.backgroundColor || this.style.backgroundColor === 'rgba(0, 0, 0, 0)') {
-                            this.style.backgroundColor = useWhiteText ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                            this.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
                         }
                     };
                     el.onmouseout = function() {
                         // 只有当按钮没有自定义背景时才恢复默认
-                        if (!this.style.backgroundColor || this.style.backgroundColor === 'rgba(255, 255, 255, 0.1)' || this.style.backgroundColor === 'rgba(0, 0, 0, 0.1)') {
+                        if (!this.style.backgroundColor || this.style.backgroundColor === 'rgba(255, 255, 255, 0.1)') {
                             this.style.backgroundColor = '';
                         }
                     };
@@ -3235,7 +3546,108 @@ window.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+    
+    // 初始化视图切换按钮
+    initViewToggle();
 });
+
+// 初始化视图切换
+function initViewToggle() {
+    const viewToggleBtn = document.getElementById('view-toggle-btn');
+    const localTrackList = document.querySelector('.local-track-list');
+    
+    if (!viewToggleBtn || !localTrackList) return;
+    
+    let isAnimating = false;
+    
+    // 从localStorage获取保存的视图模式
+    let currentView = localStorage.getItem('playlistView') || 'list';
+    
+    // 应用保存的视图模式
+    if (currentView === 'cover') {
+        localTrackList.classList.remove('list-view');
+        localTrackList.classList.add('cover-view');
+        updateViewToggleIcon(viewToggleBtn, 'cover');
+    } else {
+        localTrackList.classList.remove('cover-view');
+        localTrackList.classList.add('list-view');
+        updateViewToggleIcon(viewToggleBtn, 'list');
+    }
+    
+    // 添加点击事件
+    viewToggleBtn.addEventListener('click', function() {
+        if (isAnimating) return;
+        
+        if (localTrackList.classList.contains('list-view')) {
+            // 切换到封面视图
+            animateViewChange(localTrackList, 'cover', viewToggleBtn, () => {
+                isAnimating = false;
+            });
+        } else {
+            // 切换到列表视图
+            animateViewChange(localTrackList, 'list', viewToggleBtn, () => {
+                isAnimating = false;
+            });
+        }
+        
+        isAnimating = true;
+    });
+}
+
+// 视图切换动画
+function animateViewChange(element, newView, btn, callback) {
+    // 添加退出动画
+    element.classList.add('view-exit');
+    
+    // 等待退出动画完成
+    setTimeout(() => {
+        // 切换视图类
+        if (newView === 'cover') {
+            element.classList.remove('list-view');
+            element.classList.add('cover-view');
+            updateViewToggleIcon(btn, 'cover');
+        } else {
+            element.classList.remove('cover-view');
+            element.classList.add('list-view');
+            updateViewToggleIcon(btn, 'list');
+        }
+        
+        // 强制浏览器重排，确保样式变化生效
+        void element.offsetWidth;
+        
+        // 移除退出动画类并添加进入动画类
+        element.classList.remove('view-exit');
+        element.classList.add('view-enter');
+        
+        // 等待进入动画完成
+        setTimeout(() => {
+            element.classList.remove('view-enter');
+            // 保存视图模式到localStorage
+            localStorage.setItem('playlistView', newView);
+            // 调用回调函数
+            if (callback) callback();
+        }, 250);
+    }, 250);
+}
+
+// 更新视图切换按钮图标
+function updateViewToggleIcon(btn, view) {
+    if (view === 'cover') {
+        // 封面视图图标 - 网格
+        btn.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z"/>
+            </svg>
+        `;
+    } else {
+        // 列表视图图标 - 列表
+        btn.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M4 4h4v4H4V4zm0 6h4v4H4v-4zm0 6h4v4H4v-4zm6-12h10v4H10V4zm0 6h10v4H10v-4zm0 6h10v4H10v-4z"/>
+            </svg>
+        `;
+    }
+}
 
 // 应用默认歌词样式
 function applyDefaultLyricsStyle() {
@@ -3267,26 +3679,6 @@ function toggleLyricsVisibility() {
         rightContent.classList.remove('lyrics-hidden');
         leftContent.classList.remove('centered');
         
-        // 先设置为绝对定位，定位到右下角
-        rightContent.style.position = 'absolute';
-        rightContent.style.right = '20px';
-        rightContent.style.bottom = '80px';
-        rightContent.style.left = 'auto';
-        rightContent.style.top = 'auto';
-        rightContent.style.width = 'auto';
-        rightContent.style.maxWidth = 'none';
-        rightContent.style.transform = 'translate(0, 0)';
-        rightContent.style.transition = 'none';
-        
-        // 强制重排
-        void rightContent.offsetWidth;
-        
-        // 添加过渡动画效果
-        rightContent.style.transition = 'all 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
-        
-        // 强制重排
-        void rightContent.offsetWidth;
-        
         // 动画到原始位置
         rightContent.style.position = 'static';
         rightContent.style.right = '';
@@ -3295,6 +3687,8 @@ function toggleLyricsVisibility() {
         rightContent.style.top = '';
         rightContent.style.width = '';
         rightContent.style.maxWidth = '';
+        rightContent.style.transform = '';
+        rightContent.style.transition = 'all 0.5s ease-out';
         
         // 根据当前文本颜色决定按钮样式
         if (currentTextColor === 'rgb(255, 255, 255)') {
@@ -3321,26 +3715,6 @@ function toggleLyricsVisibility() {
         rightContent.classList.add('lyrics-hidden');
         leftContent.classList.add('centered');
         
-        // 先设置为static定位，确保元素在正确的初始位置
-        rightContent.style.position = 'static';
-        rightContent.style.right = '';
-        rightContent.style.bottom = '';
-        rightContent.style.left = '';
-        rightContent.style.top = '';
-        rightContent.style.width = '';
-        rightContent.style.maxWidth = '';
-        rightContent.style.transform = 'translate(0, 0)';
-        rightContent.style.transition = 'none';
-        
-        // 强制重排
-        void rightContent.offsetWidth;
-        
-        // 添加过渡动画效果
-        rightContent.style.transition = 'all 0.5s ease-out';
-        
-        // 强制重排
-        void rightContent.offsetWidth;
-        
         // 计算原始位置
         const originalRect = rightContent.getBoundingClientRect();
         const playerFooter = document.querySelector('.player-footer');
@@ -3350,10 +3724,6 @@ function toggleLyricsVisibility() {
         const targetRight = 20; // 右边距
         const targetBottom = 80; // 底边距
         
-        // 计算偏移量
-        const offsetX = (footerRect.width - originalRect.right) + targetRight;
-        const offsetY = (footerRect.height - originalRect.bottom) + targetBottom;
-        
         // 动画到右下角
         rightContent.style.position = 'absolute';
         rightContent.style.right = '20px';
@@ -3362,18 +3732,7 @@ function toggleLyricsVisibility() {
         rightContent.style.top = 'auto';
         rightContent.style.width = 'auto';
         rightContent.style.maxWidth = 'none';
-        
-        // 等待动画完成后添加回弹效果
-        setTimeout(() => {
-            // 添加回弹动画
-            rightContent.style.transition = 'all 0.3s ease-in-out';
-            rightContent.style.transform = 'translate(10px, 10px)';
-            
-            // 再次回弹到最终位置
-            setTimeout(() => {
-                rightContent.style.transform = 'translate(0, 0)';
-            }, 150);
-        }, 500);
+        rightContent.style.transition = 'all 0.5s ease-out';
         
         // 根据当前文本颜色决定按钮样式
         if (currentTextColor === 'rgb(255, 255, 255)') {

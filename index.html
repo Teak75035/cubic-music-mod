@@ -5,10 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CubicMusic</title>
     <script>
-        // 在CSS加载前就设置主题，防止闪烁
+        // 在CSS加载前就设置主题和侧边栏模式，防止闪烁
         (function() {
             const savedTheme = localStorage.getItem('theme') || 'light';
             document.documentElement.setAttribute('data-theme', savedTheme);
+            
+            // 设置侧边栏模式
+            const savedSidebarMode = localStorage.getItem('sidebarMode') || 'follow';
+            if (savedSidebarMode === 'floating') {
+                // 添加一个标记，在DOM加载后应用
+                window.sidebarMode = 'floating';
+                // 同时设置一个CSS变量，用于初始样式
+                document.documentElement.setAttribute('data-sidebar-mode', 'floating');
+            }
         })();
     </script>
     <link rel="stylesheet" href="styles.css">
@@ -87,8 +96,15 @@
             </section>
 
             <section class="content-section" id="playlist-content">
-                <h1>播放列表</h1>
-                <div class="local-track-list">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px;">
+                    <h1>播放列表</h1>
+                    <button class="view-toggle-btn" id="view-toggle-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M4 4h4v4H4V4zm0 6h4v4H4v-4zm0 6h4v4H4v-4zm6-12h10v4H10V4zm0 6h10v4H10v-4zm0 6h10v4H10v-4z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="local-track-list list-view">
                     <div class="track-header">
                         <div class="track-cover"></div>
                         <div class="track-number">#</div>
@@ -166,6 +182,14 @@
                                 <option value="left" selected>左对齐</option>
                                 <option value="center">居中对齐</option>
                             </select>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h2>关于</h2>
+                        <div style="padding: 16px 0;">
+                            <p style="font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">CubicMusic</p>
+                            <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 4px;">版本 Beta Ver 0.39.3</p>
+                            <p style="font-size: 14px; color: var(--text-secondary);">2025©CubicS#</p>
                         </div>
                     </div>
                 </div>
